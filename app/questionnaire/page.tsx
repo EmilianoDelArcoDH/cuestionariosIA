@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 function FeedbackBadge({ feedback }: { feedback: string }) {
@@ -47,7 +47,7 @@ function FeedbackBadge({ feedback }: { feedback: string }) {
   );
 }
 
-export default function QuestionnairePage() {
+function QuestionnaireContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id") || "1";
   const [questions, setQuestions] = useState<any[]>([]);
@@ -217,5 +217,23 @@ export default function QuestionnairePage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function QuestionnairePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-[calc(100vh-72px)] px-4 py-8 md:py-10">
+          <div className="mx-auto max-w-4xl">
+            <div className="glass-panel rounded-[1.75rem] px-5 py-4 text-sm text-[var(--muted)]">
+              Cargando cuestionario...
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <QuestionnaireContent />
+    </Suspense>
   );
 }
