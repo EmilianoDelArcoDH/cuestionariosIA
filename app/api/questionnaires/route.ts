@@ -5,6 +5,8 @@ import {
   type CreateQuestionInput
 } from '@/lib/questionnaires';
 
+export const dynamic = 'force-dynamic';
+
 function parseCsv(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean);
