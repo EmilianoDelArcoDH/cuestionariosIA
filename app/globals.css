@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f4efe7;
+  --surface: rgba(255, 250, 242, 0.84);
+  --line: rgba(82, 55, 30, 0.12);
+  --ink: #20150d;
+  --muted: #6f6258;
+  --accent: #c7653b;
+  --accent-strong: #7f3422;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(214, 132, 79, 0.18), transparent 30%),
+    radial-gradient(circle at top right, rgba(130, 177, 122, 0.16), transparent 24%),
+    linear-gradient(180deg, #f7f0e5 0%, #f3ede3 44%, #efe7db 100%);
+}
+
+::selection {
+  background: rgba(199, 101, 59, 0.24);
+}
+
+@layer base {
+  body {
+    @apply antialiased;
+  }
+
+  a,
+  button,
+  input,
+  textarea {
+    @apply transition-all duration-200;
+  }
+}
+
+@layer components {
+  .app-shell {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .app-shell::before,
+  .app-shell::after {
+    content: "";
+    position: fixed;
+    width: 24rem;
+    height: 24rem;
+    border-radius: 9999px;
+    filter: blur(70px);
+    pointer-events: none;
+    opacity: 0.55;
+    z-index: 0;
+  }
+
+  .app-shell::before {
+    top: -6rem;
+    right: -7rem;
+    background: rgba(199, 101, 59, 0.18);
+  }
+
+  .app-shell::after {
+    bottom: 0;
+    left: -8rem;
+    background: rgba(85, 122, 102, 0.14);
+  }
+
+  .glass-panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: 0 22px 60px rgba(44, 28, 16, 0.08);
+    backdrop-filter: blur(18px);
+  }
+
+  .hero-panel {
+    background:
+      linear-gradient(135deg, rgba(255, 252, 247, 0.92), rgba(252, 242, 229, 0.86)),
+      linear-gradient(120deg, rgba(199, 101, 59, 0.12), transparent 48%);
+    border: 1px solid rgba(127, 52, 34, 0.12);
+    box-shadow: 0 28px 80px rgba(58, 33, 18, 0.12);
+    backdrop-filter: blur(22px);
+  }
+
+  .section-label {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em];
+    color: var(--accent-strong);
+    background: rgba(199, 101, 59, 0.09);
+    border: 1px solid rgba(199, 101, 59, 0.16);
+  }
+
+  .soft-card {
+    background: rgba(255, 253, 248, 0.8);
+    border: 1px solid rgba(82, 55, 30, 0.1);
+    box-shadow: 0 16px 40px rgba(53, 34, 21, 0.08);
+  }
+
+  .warm-button {
+    @apply inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold text-white;
+    background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+    box-shadow: 0 16px 30px rgba(127, 52, 34, 0.24);
+  }
+
+  .warm-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 20px 34px rgba(127, 52, 34, 0.28);
+  }
+
+  .ghost-button {
+    @apply inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold;
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(82, 55, 30, 0.14);
+  }
+
+  .ghost-button:hover {
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .field-shell {
+    @apply w-full rounded-3xl px-4 py-3 outline-none;
+    border: 1px solid rgba(82, 55, 30, 0.14);
+    background: rgba(255, 252, 247, 0.92);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+
+  .field-shell:focus {
+    border-color: rgba(199, 101, 59, 0.48);
+    box-shadow:
+      0 0 0 4px rgba(199, 101, 59, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+}
