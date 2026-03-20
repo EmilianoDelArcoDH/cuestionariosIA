@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "build:deploy": "prisma migrate deploy && prisma db seed && next build",
+    "prebuild": "npm run db:setup",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
