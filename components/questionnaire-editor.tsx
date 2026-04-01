@@ -9,8 +9,8 @@ type QuestionType = 'open' | 'single' | 'multiple';
 type DraftQuestion = {
   text: string;
   type: QuestionType;
-  options: string;
-  correctAnswers: string;
+  options: string[];
+  correctAnswers: string[];
   modelAnswer: string;
   keyConcepts: string;
   expectedExpressions: string;
@@ -32,8 +32,8 @@ function createEmptyQuestion(type: QuestionType = 'open'): DraftQuestion {
   return {
     text: '',
     type,
-    options: '',
-    correctAnswers: '',
+    options: type === 'open' ? [] : ['', ''],
+    correctAnswers: [],
     modelAnswer: '',
     keyConcepts: '',
     expectedExpressions: ''
@@ -44,10 +44,10 @@ function mapIncomingQuestion(question: any): DraftQuestion {
   return {
     text: question?.text ?? '',
     type: question?.type ?? 'open',
-    options: Array.isArray(question?.options) ? question.options.join(', ') : '',
+    options: Array.isArray(question?.options) ? question.options : [],
     correctAnswers: Array.isArray(question?.choiceConfig?.correctAnswers)
-      ? question.choiceConfig.correctAnswers.join(', ')
-      : '',
+      ? question.choiceConfig.correctAnswers
+      : [],
     modelAnswer: question?.openConfig?.modelAnswer ?? '',
     keyConcepts: Array.isArray(question?.openConfig?.keyConcepts)
       ? question.openConfig.keyConcepts.join(', ')
@@ -74,6 +74,30 @@ export function QuestionnaireEditor({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
+  function normalizeClosedQuestion(question: DraftQuestion, type: QuestionType): DraftQuestion {
+    if (type === 'open') {
+      return {
+        ...question,
+        type,
+        options: [],
+        correctAnswers: []
+      };
+    }
+
+    const nextOptions = question.options.length >= 2 ? question.options : ['', ''];
+    const validCorrectAnswers = question.correctAnswers.filter((answer) =>
+      nextOptions.includes(answer)
+    );
+
+    return {
+      ...question,
+      type,
+      options: nextOptions,
+      correctAnswers:
+        type === 'single' ? validCorrectAnswers.slice(0, 1) : validCorrectAnswers
+    };
+  }
+
   function updateQuestion(index: number, patch: Partial<DraftQuestion>) {
     setQuestions((current) =>
       current.map((question, questionIndex) =>
@@ -88,6 +112,86 @@ export function QuestionnaireEditor({
 
   function removeQuestion(index: number) {
     setQuestions((current) => current.filter((_, questionIndex) => questionIndex !== index));
+  }
+
+  function updateOption(index: number, optionIndex: number, value: string) {
+    setQuestions((current) =>
+      current.map((question, questionIndex) => {
+        if (questionIndex !== index) {
+          return question;
+        }
+
+        const previousValue = question.options[optionIndex] ?? '';
+        const options = question.options.map((option, currentOptionIndex) =>
+          currentOptionIndex === optionIndex ? value : option
+        );
+        const correctAnswers = question.correctAnswers.map((answer) =>
+          answer === previousValue ? value : answer
+        );
+
+        return {
+          ...question,
+          options,
+          correctAnswers
+        };
+      })
+    );
+  }
+
+  function addOption(index: number) {
+    setQuestions((current) =>
+      current.map((question, questionIndex) =>
+        questionIndex === index
+          ? {
+              ...question,
+              options: [...question.options, '']
+            }
+          : question
+      )
+    );
+  }
+
+  function removeOption(index: number, optionIndex: number) {
+    setQuestions((current) =>
+      current.map((question, questionIndex) => {
+        if (questionIndex !== index) {
+          return question;
+        }
+
+        const removedValue = question.options[optionIndex];
+        const options = question.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex);
+
+        return {
+          ...question,
+          options,
+          correctAnswers: question.correctAnswers.filter((answer) => answer !== removedValue)
+        };
+      })
+    );
+  }
+
+  function toggleCorrectAnswer(index: number, option: string, checked: boolean) {
+    setQuestions((current) =>
+      current.map((question, questionIndex) => {
+        if (questionIndex !== index) {
+          return question;
+        }
+
+        if (question.type === 'single') {
+          return {
+            ...question,
+            correctAnswers: checked ? [option] : []
+          };
+        }
+
+        return {
+          ...question,
+          correctAnswers: checked
+            ? [...question.correctAnswers, option]
+            : question.correctAnswers.filter((answer) => answer !== option)
+        };
+      })
+    );
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -107,7 +211,11 @@ export function QuestionnaireEditor({
           body: JSON.stringify({
             title,
             description,
-            questions
+            questions: questions.map((question) => ({
+              ...question,
+              options: question.options.join(', '),
+              correctAnswers: question.correctAnswers.join(', ')
+            }))
           })
         }
       );
@@ -322,9 +430,16 @@ export function QuestionnaireEditor({
                       className="field-shell"
                       value={question.type}
                       onChange={(event) =>
-                        updateQuestion(index, {
-                          type: event.target.value as QuestionType
-                        })
+                        setQuestions((current) =>
+                          current.map((currentQuestion, questionIndex) =>
+                            questionIndex === index
+                              ? normalizeClosedQuestion(
+                                  currentQuestion,
+                                  event.target.value as QuestionType
+                                )
+                              : currentQuestion
+                          )
+                        )
                       }
                     >
                       <option value="open">Abierta evaluada por IA</option>
@@ -380,33 +495,71 @@ export function QuestionnaireEditor({
                       </div>
                     </div>
                   ) : (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="space-y-2">
-                        <span className="text-sm font-medium text-[var(--ink)]">
-                          Opciones
-                        </span>
-                        <textarea
-                          className="field-shell min-h-[120px]"
-                          value={question.options}
-                          onChange={(event) =>
-                            updateQuestion(index, { options: event.target.value })
-                          }
-                          placeholder="Separa cada opcion con comas"
-                        />
-                      </label>
-                      <label className="space-y-2">
-                        <span className="text-sm font-medium text-[var(--ink)]">
-                          Respuesta correcta
-                        </span>
-                        <textarea
-                          className="field-shell min-h-[120px]"
-                          value={question.correctAnswers}
-                          onChange={(event) =>
-                            updateQuestion(index, { correctAnswers: event.target.value })
-                          }
-                          placeholder="Para multiple, separa varias con comas"
-                        />
-                      </label>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <span className="text-sm font-medium text-[var(--ink)]">
+                            Opciones de respuesta
+                          </span>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            Cada opcion se edita por separado para que los textos largos se vean completos.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => addOption(index)}
+                        >
+                          Agregar opcion
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {question.options.map((option, optionIndex) => {
+                          const inputType = question.type === 'single' ? 'radio' : 'checkbox';
+                          const isChecked = question.correctAnswers.includes(option);
+
+                          return (
+                            <div
+                              key={optionIndex}
+                              className="grid gap-3 rounded-[1.5rem] border border-[rgba(82,55,30,0.1)] bg-[rgba(255,252,247,0.72)] p-4 md:grid-cols-[auto,1fr,auto]"
+                            >
+                              <div className="flex min-h-[44px] items-center gap-2 pt-2">
+                                <input
+                                  type={inputType}
+                                  name={`correct-${index}`}
+                                  checked={isChecked}
+                                  onChange={(event) =>
+                                    toggleCorrectAnswer(index, option, event.target.checked)
+                                  }
+                                  className="h-4 w-4"
+                                />
+                                {isChecked && (
+                                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                                    Correcta
+                                  </span>
+                                )}
+                              </div>
+                              <input
+                                className="field-shell"
+                                value={option}
+                                onChange={(event) =>
+                                  updateOption(index, optionIndex, event.target.value)
+                                }
+                                placeholder={`Opcion ${optionIndex + 1}`}
+                              />
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                onClick={() => removeOption(index, optionIndex)}
+                                disabled={question.options.length <= 2}
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </article>

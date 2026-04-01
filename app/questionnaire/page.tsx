@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -47,20 +46,58 @@ function FeedbackBadge({ feedback }: { feedback: string }) {
   );
 }
 
+function ChoiceOption({
+  checked,
+  inputType,
+  name,
+  option,
+  onChange,
+}: {
+  checked: boolean;
+  inputType: "radio" | "checkbox";
+  name?: string;
+  option: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="soft-card grid cursor-pointer grid-cols-[auto,1fr] items-start gap-3 rounded-2xl px-4 py-3">
+      <input
+        type={inputType}
+        name={name}
+        value={option}
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-1 h-4 w-4 shrink-0"
+      />
+      <span className="field-shell block min-h-[56px] whitespace-pre-wrap break-words py-3 text-sm leading-6 text-[var(--ink)]">
+        {option}
+      </span>
+    </label>
+  );
+}
+
 function QuestionnaireContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id") || "1";
+  const [title, setTitle] = useState("");
   const [questions, setQuestions] = useState<any[]>([]);
   const [answers, setAnswers] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<string[]>([]);
+  const [summary, setSummary] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetch(`/api/questions?id=${id}`)
       .then((res) => res.json())
       .then((data) => {
-        setQuestions(data);
-        setAnswers(Array(data.length).fill(""));
-        setFeedback(Array(data.length).fill(""));
+        const loadedQuestions = Array.isArray(data?.questions) ? data.questions : [];
+        setTitle(data?.title || `Cuestionario ${id}`);
+        setQuestions(loadedQuestions);
+        setAnswers(Array(loadedQuestions.length).fill(""));
+        setFeedback(Array(loadedQuestions.length).fill(""));
+        setSummary("");
+        setError("");
       });
   }, [id]);
 
@@ -68,25 +105,51 @@ function QuestionnaireContent() {
     const newAnswers = [...answers];
     newAnswers[idx] = value;
     setAnswers(newAnswers);
+    setError("");
   };
 
-  const handleEvaluate = async (idx: number) => {
-    const q = questions[idx];
+  const isAnswered = (question: any, answer: any) => {
+    if (question.type === "open" || question.type === "single") {
+      return typeof answer === "string" && answer.trim().length > 0;
+    }
+
+    if (question.type === "multiple") {
+      return Array.isArray(answer) && answer.length > 0;
+    }
+
+    return false;
+  };
+
+  const missingCount = questions.filter(
+    (question, idx) => !isAnswered(question, answers[idx])
+  ).length;
+
+  const handleEvaluate = async () => {
+    setSubmitting(true);
+    setError("");
+    setSummary("");
+
     const res = await fetch("/api/evaluate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        answer: answers[idx],
-        questionId: q.id,
-        type: q.type,
+        answers: questions.map((question, idx) => ({
+          questionId: question.id,
+          answer: answers[idx],
+        })),
       }),
     });
     const data = await res.json();
-    setFeedback((prev) => {
-      const newFeedback = [...prev];
-      newFeedback[idx] = data.feedback;
-      return newFeedback;
-    });
+
+    if (!res.ok) {
+      setError(data.error || "No se pudo evaluar el cuestionario.");
+      setSubmitting(false);
+      return;
+    }
+
+    setFeedback(Array.isArray(data.feedback) ? data.feedback : []);
+    setSummary(data.summary || "");
+    setSubmitting(false);
   };
 
   return (
@@ -100,19 +163,14 @@ function QuestionnaireContent() {
                 className="text-3xl font-bold tracking-tight"
                 style={{ fontFamily: "var(--font-display)" }}
               >
-                Cuestionario #{id}
+                {title || `Cuestionario ${id}`}
               </h1>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                Responde cada punto y evalua individualmente para ver feedback inmediato.
+                Responde cada punto.
               </p>
             </div>
-            <div className="flex flex-col gap-3 md:items-end">
-              <div className="glass-panel rounded-[1.5rem] px-4 py-3 text-sm text-[var(--muted)]">
-                {questions.length} preguntas cargadas
-              </div>
-              <Link href={`/edit/${id}`} className="ghost-button">
-                Editar cuestionario
-              </Link>
+            <div className="glass-panel rounded-[1.5rem] px-4 py-3 text-sm text-[var(--muted)] md:self-end">
+              {questions.length} preguntas cargadas
             </div>
           </div>
         </section>
@@ -122,63 +180,55 @@ function QuestionnaireContent() {
             No hay preguntas en este cuestionario.
           </div>
         ) : (
-          questions.map((q, idx) => (
-            <div key={q.id} className="glass-panel rounded-[1.75rem] p-5 md:p-6">
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Pregunta {idx + 1}
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{q.text}</p>
+          <>
+            {questions.map((q, idx) => (
+              <div key={q.id} className="glass-panel rounded-[1.75rem] p-5 md:p-6">
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                      Pregunta {idx + 1}
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{q.text}</p>
+                  </div>
+                  <span className="section-label whitespace-nowrap">{q.type}</span>
                 </div>
-                <span className="section-label whitespace-nowrap">{q.type}</span>
-              </div>
 
-              {q.type === "open" && (
-                <textarea
-                  className="field-shell mb-2 min-h-[132px] text-sm leading-6"
-                  rows={3}
-                  value={answers[idx] || ""}
-                  onChange={(e) => handleChange(idx, e.target.value)}
-                  placeholder="Escribe tu respuesta aqui..."
-                />
-              )}
+                {q.type === "open" && (
+                  <textarea
+                    className="field-shell mb-2 min-h-[132px] text-sm leading-6"
+                    rows={3}
+                    value={answers[idx] || ""}
+                    onChange={(e) => handleChange(idx, e.target.value)}
+                    placeholder="Escribe tu respuesta aqui..."
+                  />
+                )}
 
-              {q.type === "single" && (
-                <div className="mb-2 space-y-2">
-                  {q.options.map((opt: string, optIdx: number) => (
-                    <label
-                      key={optIdx}
-                      className="soft-card flex items-center gap-3 rounded-2xl px-4 py-3"
-                    >
-                      <input
-                        type="radio"
+                {q.type === "single" && (
+                  <div className="mb-2 space-y-2">
+                    {q.options.map((opt: string, optIdx: number) => (
+                      <ChoiceOption
+                        key={optIdx}
+                        inputType="radio"
                         name={`single-${idx}`}
-                        value={opt}
+                        option={opt}
                         checked={answers[idx] === opt}
                         onChange={() => handleChange(idx, opt)}
-                        className="h-4 w-4"
                       />
-                      {opt}
-                    </label>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
 
-              {q.type === "multiple" && (
-                <div className="mb-2 space-y-2">
-                  {q.options.map((opt: string, optIdx: number) => (
-                    <label
-                      key={optIdx}
-                      className="soft-card flex items-center gap-3 rounded-2xl px-4 py-3"
-                    >
-                      <input
-                        type="checkbox"
-                        value={opt}
+                {q.type === "multiple" && (
+                  <div className="mb-2 space-y-2">
+                    {q.options.map((opt: string, optIdx: number) => (
+                      <ChoiceOption
+                        key={optIdx}
+                        inputType="checkbox"
+                        option={opt}
                         checked={Array.isArray(answers[idx]) && answers[idx].includes(opt)}
-                        onChange={(e) => {
+                        onChange={(checked) => {
                           const prev = Array.isArray(answers[idx]) ? answers[idx] : [];
-                          if (e.target.checked) {
+                          if (checked) {
                             handleChange(idx, [...prev, opt]);
                           } else {
                             handleChange(
@@ -187,33 +237,61 @@ function QuestionnaireContent() {
                             );
                           }
                         }}
-                        className="h-4 w-4"
                       />
-                      {opt}
-                    </label>
-                  ))}
+                    ))}
+                  </div>
+                )}
+
+                {q.type === "image" && (
+                  <div className="mb-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled
+                      className="field-shell mb-2 cursor-not-allowed bg-[rgba(82,55,30,0.06)]"
+                    />
+                    <div className="text-xs text-[var(--muted)]">(Proximamente: subir imagen)</div>
+                  </div>
+                )}
+
+                {feedback[idx] && <FeedbackBadge feedback={feedback[idx]} />}
+              </div>
+            ))}
+
+            <div className="glass-panel rounded-[1.75rem] p-5 md:p-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--ink)]">
+                    Envio final del cuestionario
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    {missingCount === 0
+                      ? "Ya puedes enviar todas tus respuestas para evaluarlas juntas."
+                      : `Faltan ${missingCount} pregunta${missingCount === 1 ? "" : "s"} por completar.`}
+                  </p>
                 </div>
+                <button
+                  className="warm-button"
+                  onClick={handleEvaluate}
+                  disabled={submitting}
+                >
+                  {submitting ? "Evaluando cuestionario..." : "Enviar cuestionario"}
+                </button>
+              </div>
+
+              {error && (
+                <p className="mt-4 rounded-[1.25rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {error}
+                </p>
               )}
 
-              {q.type === "image" && (
-                <div className="mb-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled
-                    className="field-shell mb-2 cursor-not-allowed bg-[rgba(82,55,30,0.06)]"
-                  />
-                  <div className="text-xs text-[var(--muted)]">(Proximamente: subir imagen)</div>
+              {summary && (
+                <div className="mt-4 rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+                  {summary}
                 </div>
               )}
-
-              <button className="warm-button" onClick={() => handleEvaluate(idx)}>
-                Evaluar respuesta
-              </button>
-
-              {feedback[idx] && <FeedbackBadge feedback={feedback[idx]} />}
             </div>
-          ))
+          </>
         )}
       </div>
     </main>

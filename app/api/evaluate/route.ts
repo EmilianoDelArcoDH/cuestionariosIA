@@ -125,8 +125,116 @@ async function evaluateOpenQuestion(answer: string, questionText: string, questi
   }
 }
 
+function isQuestionAnswered(question: any, answer: unknown) {
+  if (question.type === 'open') {
+    return typeof answer === 'string' && Boolean(answer.trim());
+  }
+
+  if (question.type === 'single') {
+    return typeof answer === 'string' && Boolean(answer.trim());
+  }
+
+  if (question.type === 'multiple') {
+    return Array.isArray(answer) && answer.length > 0;
+  }
+
+  return false;
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
+  const answers = Array.isArray(body?.answers) ? body.answers : null;
+
+  if (answers) {
+    const questions = await Promise.all(
+      answers.map(async (entry: { questionId?: unknown; answer?: unknown }) => {
+        const questionId = Number(entry?.questionId);
+
+        if (!questionId) {
+          return null;
+        }
+
+        const question = await findQuestionById(questionId);
+
+        if (!question) {
+          return null;
+        }
+
+        return {
+          question,
+          answer: entry?.answer
+        };
+      })
+    );
+
+    if (questions.some((entry) => !entry)) {
+      return NextResponse.json(
+        { error: 'No se pudieron cargar todas las preguntas para evaluar.' },
+        { status: 400 }
+      );
+    }
+
+    const missingQuestions = questions.filter(
+      (entry) => entry && !isQuestionAnswered(entry.question, entry.answer)
+    );
+
+    if (missingQuestions.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Completa todas las preguntas antes de enviar el cuestionario.',
+          missingQuestionIds: missingQuestions.map((entry) => entry?.question.id)
+        },
+        { status: 400 }
+      );
+    }
+
+    const feedback = await Promise.all(
+      questions.map(async (entry) => {
+        if (!entry) {
+          return null;
+        }
+
+        const { question, answer } = entry;
+
+        if (question.type === 'open') {
+          return await evaluateOpenQuestion(
+            typeof answer === 'string' ? answer : '',
+            question.text,
+            question.id,
+            question.openConfig?.modelAnswer ?? '',
+            question.openConfig?.keyConcepts ?? [],
+            question.openConfig?.expectedExpressions ?? []
+          );
+        }
+
+        if (question.type === 'single' || question.type === 'multiple') {
+          return evaluateChoiceQuestion(
+            answer,
+            question.choiceConfig?.correctAnswers ?? [],
+            question.type
+          );
+        }
+
+        return 'Tipo de pregunta desconocido.';
+      })
+    );
+
+    const scores = feedback
+      .map((item) => (item ? extractScore(item) : null))
+      .filter((score): score is number => score !== null);
+    const averageScore = scores.length
+      ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
+      : null;
+
+    return NextResponse.json({
+      feedback,
+      summary:
+        averageScore !== null
+          ? `Cuestionario evaluado. Puntaje general: ${averageScore}/100.`
+          : 'Cuestionario evaluado.'
+    });
+  }
+
   const answer = body?.answer;
   const questionId = Number(body?.questionId);
 
