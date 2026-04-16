@@ -8,19 +8,93 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-function parseCsv(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean);
-  }
+function parseLineOrCsv(value: string): string[] {
+  const normalized = value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 
-  if (typeof value !== 'string') {
-    return [];
+  if (normalized.length > 1) {
+    return normalized;
   }
 
   return value
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function parseChoiceValues(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item.trim();
+        }
+
+        if (item && typeof item === 'object') {
+          const record = item as Record<string, unknown>;
+          const textCandidate =
+            typeof record.text === 'string'
+              ? record.text
+              : typeof record.value === 'string'
+                ? record.value
+                : typeof record.label === 'string'
+                  ? record.label
+                  : '';
+
+          return textCandidate.trim();
+        }
+
+        return String(item).trim();
+      })
+      .filter(Boolean);
+  }
+
+  if (typeof value !== 'string') {
+    return [];
+  }
+
+  return parseLineOrCsv(value);
+}
+
+function parseCorrectAnswers(
+  correctAnswersValue: unknown,
+  optionsValue: unknown
+): string[] {
+  const directAnswers = parseChoiceValues(correctAnswersValue);
+  if (directAnswers.length > 0) {
+    return directAnswers;
+  }
+
+  if (!Array.isArray(optionsValue)) {
+    return [];
+  }
+
+  return optionsValue
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+      const isCorrect = record.isCorrect === true || record.correct === true;
+      const textCandidate =
+        typeof record.text === 'string'
+          ? record.text
+          : typeof record.value === 'string'
+            ? record.value
+            : typeof record.label === 'string'
+              ? record.label
+              : '';
+
+      if (!isCorrect || !textCandidate.trim()) {
+        return null;
+      }
+
+      return textCandidate.trim();
+    })
+    .filter((item): item is string => Boolean(item));
 }
 
 function parseQuestions(rawQuestions: unknown[]): CreateQuestionInput[] {
@@ -52,13 +126,13 @@ function parseQuestions(rawQuestions: unknown[]): CreateQuestionInput[] {
         text,
         type: 'open',
         modelAnswer,
-        keyConcepts: parseCsv(record.keyConcepts),
-        expectedExpressions: parseCsv(record.expectedExpressions)
+        keyConcepts: parseChoiceValues(record.keyConcepts),
+        expectedExpressions: parseChoiceValues(record.expectedExpressions)
       };
     }
 
-    const options = parseCsv(record.options);
-    const correctAnswers = parseCsv(record.correctAnswers);
+    const options = parseChoiceValues(record.options);
+    const correctAnswers = parseCorrectAnswers(record.correctAnswers, record.options);
 
     if (options.length < 2) {
       throw new Error(`La pregunta ${index + 1} necesita al menos dos opciones.`);
