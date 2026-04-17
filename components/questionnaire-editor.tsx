@@ -211,11 +211,7 @@ export function QuestionnaireEditor({
           body: JSON.stringify({
             title,
             description,
-            questions: questions.map((question) => ({
-              ...question,
-              options: question.options.join(', '),
-              correctAnswers: question.correctAnswers.join(', ')
-            }))
+            questions
           })
         }
       );
