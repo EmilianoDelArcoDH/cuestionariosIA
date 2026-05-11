@@ -17,6 +17,54 @@ export default function DashboardPage() {
   } = useSWR('/api/questionnaires', fetcher);
   const [deleteError, setDeleteError] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [translatingKey, setTranslatingKey] = useState('');
+
+  async function handleTranslate(
+    id: number,
+    title: string,
+    language: 'en' | 'pt'
+  ) {
+    const languageLabel = language === 'en' ? 'ingles' : 'portugues';
+    const confirmed = window.confirm(
+      `Se va a crear una copia traducida de "${title}" en ${languageLabel}.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setTranslatingKey(`${id}-${language}`);
+    setDeleteError('');
+
+    try {
+      const response = await fetch(`/api/questionnaires/${id}/translate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          language
+        })
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.error || 'No se pudo duplicar y traducir el cuestionario.'
+        );
+      }
+
+      await Promise.all([mutate(), mutateCache('/api/dashboard/summary')]);
+    } catch (translationError) {
+      setDeleteError(
+        translationError instanceof Error
+          ? translationError.message
+          : 'No se pudo duplicar y traducir el cuestionario.'
+      );
+    } finally {
+      setTranslatingKey('');
+    }
+  }
 
   async function handleDelete(id: number, title: string) {
     const confirmed = window.confirm(
@@ -256,6 +304,30 @@ export default function DashboardPage() {
                         >
                           Editar
                         </Link>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() =>
+                            handleTranslate(questionnaire.id, questionnaire.title, 'en')
+                          }
+                          disabled={Boolean(translatingKey) || deletingId === questionnaire.id}
+                        >
+                          {translatingKey === `${questionnaire.id}-en`
+                            ? 'Traduciendo EN...'
+                            : 'Duplicar EN'}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() =>
+                            handleTranslate(questionnaire.id, questionnaire.title, 'pt')
+                          }
+                          disabled={Boolean(translatingKey) || deletingId === questionnaire.id}
+                        >
+                          {translatingKey === `${questionnaire.id}-pt`
+                            ? 'Traduciendo PT...'
+                            : 'Duplicar PT'}
+                        </button>
                         <button
                           type="button"
                           className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700"
