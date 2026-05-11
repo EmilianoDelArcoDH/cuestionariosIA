@@ -78,7 +78,9 @@ function ChoiceOption({
 
 function QuestionnaireContent() {
   const searchParams = useSearchParams();
+  const idq = searchParams.get("idq");
   const id = searchParams.get("id") || "1";
+  const questionnaireParam = idq ? `idq=${idq}` : `id=${id}`;
   const [title, setTitle] = useState("");
   const [questions, setQuestions] = useState<any[]>([]);
   const [answers, setAnswers] = useState<any[]>([]);
@@ -88,7 +90,7 @@ function QuestionnaireContent() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/questions?id=${id}`)
+    fetch(`/api/questions?${questionnaireParam}`)
       .then((res) => res.json())
       .then((data) => {
         const loadedQuestions = Array.isArray(data?.questions) ? data.questions : [];
@@ -99,7 +101,7 @@ function QuestionnaireContent() {
         setSummary("");
         setError("");
       });
-  }, [id]);
+  }, [id, idq, questionnaireParam]);
 
   const handleChange = (idx: number, value: any) => {
     const newAnswers = [...answers];
