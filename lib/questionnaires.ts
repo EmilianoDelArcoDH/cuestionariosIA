@@ -125,6 +125,28 @@ export async function getQuestionnaireById(id: number) {
   return questionnaire ? mapQuestionnaireDetail(questionnaire) : null;
 }
 
+export async function getQuestionnaireByIdq(idq: string) {
+  const questionnaire = (await db.questionnaire.findUnique({
+    where: { idq },
+    include: {
+      questions: {
+        orderBy: {
+          position: 'asc'
+        },
+        include: {
+          options: {
+            orderBy: {
+              position: 'asc'
+            }
+          }
+        }
+      }
+    }
+  })) as QuestionnaireRecord | null;
+
+  return questionnaire ? mapQuestionnaireDetail(questionnaire) : null;
+}
+
 export async function getQuestionsByQuestionnaireId(id: number) {
   const questionnaire = await getQuestionnaireById(id);
   return questionnaire ? questionnaire.questions : [];

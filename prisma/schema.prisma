@@ -15,6 +15,7 @@ enum QuestionType {
 
 model Questionnaire {
   id          Int        @id @default(autoincrement())
+  idq         String?    @unique
   title       String
   description String     @default("")
   createdAt   DateTime   @default(now())
