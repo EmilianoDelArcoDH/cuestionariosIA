@@ -91,7 +91,7 @@ export default function HomePage() {
                 questionnaires.map((q) => (
                   <Link
                     key={q.id}
-                    href={`/questionnaire?id=${q.id}`}
+                    href={`/questionnaire?idq=${q.idq}`}
                     className="soft-card flex w-full items-center justify-between rounded-3xl px-5 py-4 hover:-translate-y-0.5 hover:border-[rgba(199,101,59,0.24)] hover:bg-[rgba(255,253,248,0.95)]"
                   >
                     <div>
