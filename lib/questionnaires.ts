@@ -35,6 +35,7 @@ type QuestionRecord = {
 
 type QuestionnaireRecord = {
   id: number;
+  idq?: string | null;
   title: string;
   description: string;
   questions: QuestionRecord[];
@@ -71,11 +72,13 @@ function mapQuestion(question: QuestionRecord) {
 
 function mapQuestionnaireSummary(questionnaire: {
   id: number;
+  idq?: string | null;
   title: string;
   description: string;
 }) {
   return {
     id: questionnaire.id,
+    idq: questionnaire.idq,
     title: questionnaire.title,
     description: questionnaire.description
   };
@@ -95,6 +98,7 @@ export async function getQuestionnaires() {
     },
     select: {
       id: true,
+      idq: true,
       title: true,
       description: true
     }

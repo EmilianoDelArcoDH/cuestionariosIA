@@ -299,7 +299,7 @@ export default function DashboardPage() {
                           Abrir
                         </Link>
                         <Link
-                          href={`/edit/${questionnaire.id}`}
+                          href={`/edit/${questionnaire.idq}`}
                           className="ghost-button"
                         >
                           Editar
