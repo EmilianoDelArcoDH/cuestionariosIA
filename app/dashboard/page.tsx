@@ -275,6 +275,7 @@ export default function DashboardPage() {
                   Todavia no hay cuestionarios creados.
                 </p>
               )}
+              
 
               {Array.isArray(questionnaires) && questionnaires.length > 0 && (
                 <div className="space-y-3">
@@ -293,13 +294,13 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Link
-                          href={`/questionnaire?id=${questionnaire.id}`}
+                          href={`/questionnaire?id=${questionnaire.idq}`}
                           className="ghost-button"
                         >
                           Abrir
                         </Link>
                         <Link
-                          href={`/edit/${questionnaire.idq}`}
+                          href={`/edit/${questionnaire.id}`}
                           className="ghost-button"
                         >
                           Editar
