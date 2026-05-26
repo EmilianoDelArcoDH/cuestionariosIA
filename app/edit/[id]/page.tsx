@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 
 type QuestionnaireDetail = {
   id: number;
+  idq?: string | null;
   title: string;
   description: string;
   questions: any[];

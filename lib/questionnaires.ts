@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { randomUUID } from 'crypto';
 
 export type PersistedQuestionType = 'open' | 'single' | 'multiple';
 
@@ -178,6 +179,7 @@ export async function createQuestionnaire(input: {
 }) {
   const created = (await db.questionnaire.create({
     data: {
+      idq: randomUUID(),
       title: input.title.trim(),
       description: input.description.trim(),
       questions: {

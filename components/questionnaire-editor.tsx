@@ -18,6 +18,7 @@ type DraftQuestion = {
 
 type QuestionnaireEditorData = {
   id?: number;
+  idq?: string | null;
   title: string;
   description: string;
   questions: DraftQuestion[];
@@ -227,7 +228,7 @@ export function QuestionnaireEditor({
         );
       }
 
-      router.push(`/questionnaire?id=${data.id}`);
+      router.push(data.idq ? `/questionnaire?idq=${data.idq}` : `/questionnaire?id=${data.id}`);
       router.refresh();
     } catch (submissionError) {
       setError(
@@ -310,7 +311,14 @@ export function QuestionnaireEditor({
                 Volver al dashboard
               </Link>
               {mode === 'edit' && initialData?.id && (
-                <Link href={`/questionnaire?id=${initialData.id}`} className="ghost-button">
+                <Link
+                  href={
+                    initialData.idq
+                      ? `/questionnaire?idq=${initialData.idq}`
+                      : `/questionnaire?id=${initialData.id}`
+                  }
+                  className="ghost-button"
+                >
                   Ver cuestionario
                 </Link>
               )}

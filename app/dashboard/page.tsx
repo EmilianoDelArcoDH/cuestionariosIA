@@ -294,7 +294,11 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Link
-                          href={`/questionnaire?id=${questionnaire.idq}`}
+                          href={
+                            questionnaire.idq
+                              ? `/questionnaire?idq=${questionnaire.idq}`
+                              : `/questionnaire?id=${questionnaire.id}`
+                          }
                           className="ghost-button"
                         >
                           Abrir
