@@ -2,20 +2,22 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { usePgEvent } from "@/lib/hooks/usePgEvent";
+
+function extractFeedbackScore(feedback: string): number | null {
+  const match = feedback.match(
+    /(\d{1,3})\s*\/\s*100|puntaje\s*:?\s*(\d{1,3})/i
+  );
+  const value = match?.[1] ?? match?.[2];
+
+  return value ? Number(value) : null;
+}
 
 function FeedbackBadge({ feedback }: { feedback: string }) {
   let color =
     "border-[rgba(82,55,30,0.1)] bg-[rgba(255,252,247,0.78)] text-[var(--ink)]";
   let label = "Revision";
-  const puntajeMatch = feedback.match(
-    /(\d{1,3})\s*\/\s*100|puntaje\s*:?\s*(\d{1,3})/i
-  );
-  let puntaje = null;
-
-  if (puntajeMatch) {
-    puntaje = puntajeMatch[1] || puntajeMatch[2];
-    puntaje = parseInt(puntaje, 10);
-  }
+  const puntaje = extractFeedbackScore(feedback);
 
   if (puntaje !== null && puntaje >= 70) {
     color = "border-emerald-200 bg-emerald-50 text-emerald-800";
@@ -77,6 +79,7 @@ function ChoiceOption({
 }
 
 function QuestionnaireContent() {
+  const { postEvent } = usePgEvent();
   const searchParams = useSearchParams();
   const idq = searchParams.get("idq");
   const id = searchParams.get("id") || "1";
@@ -127,31 +130,109 @@ function QuestionnaireContent() {
   ).length;
 
   const handleEvaluate = async () => {
-    setSubmitting(true);
     setError("");
     setSummary("");
 
-    const res = await fetch("/api/evaluate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        answers: questions.map((question, idx) => ({
-          questionId: question.id,
-          answer: answers[idx],
-        })),
-      }),
-    });
-    const data = await res.json();
+    const answeredQuestions = questions.map((question, idx) => ({
+      questionId: question.id,
+      question: question.text,
+      answer: answers[idx],
+    }));
+    const failureReasons = questions
+      .map((question, idx) =>
+        isAnswered(question, answers[idx])
+          ? null
+          : `La pregunta ${idx + 1} está incompleta: ${question.text}`
+      )
+      .filter((reason): reason is string => reason !== null);
 
-    if (!res.ok) {
-      setError(data.error || "No se pudo evaluar el cuestionario.");
-      setSubmitting(false);
+    if (failureReasons.length > 0) {
+      const message = "El ejercicio está incompleto";
+      setError(message);
+      postEvent("FAILURE", message, failureReasons, {
+        questionnaireId: idq ?? id,
+        title,
+        answers: answeredQuestions,
+        approved: false,
+        completed: false,
+      });
       return;
     }
 
-    setFeedback(Array.isArray(data.feedback) ? data.feedback : []);
-    setSummary(data.summary || "");
-    setSubmitting(false);
+    setSubmitting(true);
+
+    try {
+      const res = await fetch("/api/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: answeredQuestions }),
+      });
+      const result = await res.json();
+
+      if (!res.ok) {
+        const message = result.error || "No se pudo evaluar el cuestionario.";
+        setError(message);
+        postEvent("FAILURE", message, [message], {
+          questionnaireId: idq ?? id,
+          title,
+          answers: answeredQuestions,
+          approved: false,
+          completed: false,
+        });
+        return;
+      }
+
+      const evaluationFeedback = Array.isArray(result.feedback) ? result.feedback : [];
+      const stateToPost = {
+        questionnaireId: idq ?? id,
+        title,
+        answers: answeredQuestions.map((answer, idx) => ({
+          ...answer,
+          feedback: evaluationFeedback[idx] ?? "",
+        })),
+        score: typeof result.score === "number" ? result.score : null,
+        approved: result.approved === true,
+        completed: true,
+      };
+
+      setFeedback(evaluationFeedback);
+      setSummary(result.summary || "");
+
+      if (stateToPost.approved) {
+        postEvent("SUCCESS", "Has completado y aprobado el ejercicio", [], stateToPost);
+      } else {
+        const failedAnswerReasons = evaluationFeedback
+          .map((item: string, idx: number) => {
+            const score = extractFeedbackScore(item);
+            return score !== null && score < 70
+              ? `Pregunta ${idx + 1}: ${item}`
+              : null;
+          })
+          .filter((reason: string | null): reason is string => reason !== null);
+        const failureReasonsFiltered = failedAnswerReasons.length > 0
+          ? failedAnswerReasons
+          : [result.summary || "El puntaje obtenido no alcanza el mínimo de aprobación."];
+
+        postEvent(
+          "FAILURE",
+          "No has aprobado el ejercicio",
+          failureReasonsFiltered,
+          stateToPost
+        );
+      }
+    } catch {
+      const message = "No se pudo conectar con el servicio de evaluación.";
+      setError(message);
+      postEvent("FAILURE", message, [message], {
+        questionnaireId: idq ?? id,
+        title,
+        answers: answeredQuestions,
+        approved: false,
+        completed: false,
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

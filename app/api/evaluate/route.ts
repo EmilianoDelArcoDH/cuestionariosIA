@@ -228,6 +228,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       feedback,
+      score: averageScore,
+      approved: averageScore !== null && averageScore >= 70,
       summary:
         averageScore !== null
           ? `Cuestionario evaluado. Puntaje general: ${averageScore}/100.`
