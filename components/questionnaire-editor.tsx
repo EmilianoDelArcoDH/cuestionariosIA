@@ -29,6 +29,32 @@ type QuestionnaireEditorProps = {
   initialData?: QuestionnaireEditorData;
 };
 
+const exampleJson = `{
+  "title": "Introduccion a HTML",
+  "description": "Preguntas basicas sobre enlaces y estructura.",
+  "questions": [
+    {
+      "text": "Para que sirve la etiqueta <a> en HTML?",
+      "type": "open",
+      "modelAnswer": "Sirve para crear enlaces hacia otra pagina, archivo, seccion o recurso.",
+      "keyConcepts": ["enlace", "href", "recurso"],
+      "expectedExpressions": ["<a>", "href"]
+    },
+    {
+      "text": "Que atributo define el destino de un enlace?",
+      "type": "single",
+      "options": ["src", "href", "alt"],
+      "correctAnswers": ["href"]
+    },
+    {
+      "text": "Cuales son lenguajes usados en frontend?",
+      "type": "multiple",
+      "options": ["HTML", "CSS", "SQL", "JavaScript"],
+      "correctAnswers": ["HTML", "CSS", "JavaScript"]
+    }
+  ]
+}`;
+
 function createEmptyQuestion(type: QuestionType = 'open'): DraftQuestion {
   return {
     text: '',
@@ -38,6 +64,162 @@ function createEmptyQuestion(type: QuestionType = 'open'): DraftQuestion {
     modelAnswer: '',
     keyConcepts: '',
     expectedExpressions: ''
+  };
+}
+
+function parseListValue(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item.trim();
+        }
+
+        if (item && typeof item === 'object') {
+          const record = item as Record<string, unknown>;
+          const text =
+            typeof record.text === 'string'
+              ? record.text
+              : typeof record.value === 'string'
+                ? record.value
+                : typeof record.label === 'string'
+                  ? record.label
+                  : '';
+
+          return text.trim();
+        }
+
+        return String(item).trim();
+      })
+      .filter(Boolean);
+  }
+
+  if (typeof value !== 'string') {
+    return [];
+  }
+
+  const lineItems = value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (lineItems.length > 1) {
+    return lineItems;
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeImportedQuestionnaire(payload: unknown): QuestionnaireEditorData {
+  const record =
+    payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+  const nextTitle = typeof record.title === 'string' ? record.title.trim() : '';
+  const nextDescription =
+    typeof record.description === 'string' ? record.description.trim() : '';
+  const rawQuestions = Array.isArray(record.questions) ? record.questions : [];
+
+  if (!nextTitle) {
+    throw new Error('El JSON necesita un title.');
+  }
+
+  if (rawQuestions.length === 0) {
+    throw new Error('El JSON necesita al menos una pregunta en questions.');
+  }
+
+  const nextQuestions: DraftQuestion[] = rawQuestions.map((rawQuestion, index) => {
+    const questionRecord =
+      rawQuestion && typeof rawQuestion === 'object'
+        ? (rawQuestion as Record<string, unknown>)
+        : {};
+    const text =
+      typeof questionRecord.text === 'string' ? questionRecord.text.trim() : '';
+    const type = questionRecord.type;
+
+    if (!text) {
+      throw new Error(`La pregunta ${index + 1} no tiene text.`);
+    }
+
+    if (type !== 'open' && type !== 'single' && type !== 'multiple') {
+      throw new Error(`La pregunta ${index + 1} tiene type invalido.`);
+    }
+
+    if (type === 'open') {
+      const openConfig =
+        questionRecord.openConfig && typeof questionRecord.openConfig === 'object'
+          ? (questionRecord.openConfig as Record<string, unknown>)
+          : {};
+      const modelAnswer =
+        typeof questionRecord.modelAnswer === 'string'
+          ? questionRecord.modelAnswer.trim()
+          : typeof openConfig.modelAnswer === 'string'
+            ? openConfig.modelAnswer.trim()
+            : '';
+
+      if (!modelAnswer) {
+        throw new Error(`La pregunta abierta ${index + 1} necesita modelAnswer.`);
+      }
+
+      return {
+        text,
+        type: 'open',
+        options: [],
+        correctAnswers: [],
+        modelAnswer,
+        keyConcepts: parseListValue(
+          questionRecord.keyConcepts ?? openConfig.keyConcepts
+        ).join(', '),
+        expectedExpressions: parseListValue(
+          questionRecord.expectedExpressions ?? openConfig.expectedExpressions
+        ).join(', ')
+      };
+    }
+
+    const choiceConfig =
+      questionRecord.choiceConfig && typeof questionRecord.choiceConfig === 'object'
+        ? (questionRecord.choiceConfig as Record<string, unknown>)
+        : {};
+    const options = parseListValue(questionRecord.options);
+    const correctAnswers = parseListValue(
+      questionRecord.correctAnswers ?? choiceConfig.correctAnswers
+    );
+
+    if (options.length < 2) {
+      throw new Error(`La pregunta ${index + 1} necesita al menos dos opciones.`);
+    }
+
+    if (correctAnswers.length === 0) {
+      throw new Error(`La pregunta ${index + 1} necesita correctAnswers.`);
+    }
+
+    if (type === 'single' && correctAnswers.length !== 1) {
+      throw new Error(`La pregunta simple ${index + 1} debe tener una sola respuesta correcta.`);
+    }
+
+    const invalidCorrect = correctAnswers.find((answer) => !options.includes(answer));
+    if (invalidCorrect) {
+      throw new Error(
+        `La respuesta correcta "${invalidCorrect}" de la pregunta ${index + 1} no existe entre las opciones.`
+      );
+    }
+
+    return {
+      text,
+      type,
+      options,
+      correctAnswers,
+      modelAnswer: '',
+      keyConcepts: '',
+      expectedExpressions: ''
+    };
+  });
+
+  return {
+    title: nextTitle,
+    description: nextDescription,
+    questions: nextQuestions
   };
 }
 
@@ -71,6 +253,8 @@ export function QuestionnaireEditor({
       ? initialData.questions.map(mapIncomingQuestion)
       : [createEmptyQuestion()]
   );
+  const [jsonInput, setJsonInput] = useState('');
+  const [jsonMessage, setJsonMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
@@ -193,6 +377,28 @@ export function QuestionnaireEditor({
         };
       })
     );
+  }
+
+  function loadJsonIntoForm() {
+    setError('');
+    setJsonMessage('');
+
+    try {
+      const payload = JSON.parse(jsonInput);
+      const imported = normalizeImportedQuestionnaire(payload);
+
+      setTitle(imported.title);
+      setDescription(imported.description);
+      setQuestions(imported.questions);
+      setJsonMessage(`JSON cargado: ${imported.questions.length} preguntas listas para revisar.`);
+    } catch (jsonError) {
+      setJsonMessage('');
+      setError(
+        jsonError instanceof Error
+          ? jsonError.message
+          : 'No se pudo interpretar el JSON.'
+      );
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -356,6 +562,50 @@ export function QuestionnaireEditor({
                 />
               </label>
             </div>
+          </section>
+
+          <section className="glass-panel rounded-[2rem] p-6 space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Carga rapida
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-[var(--ink)]">
+                  Importar desde JSON
+                </h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setJsonInput(exampleJson)}
+                >
+                  Ver ejemplo
+                </button>
+                <button
+                  type="button"
+                  className="warm-button"
+                  onClick={loadJsonIntoForm}
+                  disabled={!jsonInput.trim()}
+                >
+                  Cargar JSON
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              className="field-shell min-h-[260px] font-mono text-xs leading-5"
+              value={jsonInput}
+              onChange={(event) => setJsonInput(event.target.value)}
+              placeholder={exampleJson}
+              spellCheck={false}
+            />
+
+            {jsonMessage && (
+              <p className="rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {jsonMessage}
+              </p>
+            )}
           </section>
 
           <section className="glass-panel rounded-[2rem] p-6 space-y-4">
