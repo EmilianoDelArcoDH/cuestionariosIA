@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { findQuestionById } from '@/lib/questionnaires';
+import { requestEvaluationFeedback } from '@/lib/geminiEvaluation';
+import { buildEvaluationPrompt } from '@/lib/evaluationPrompt';
 
-const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 function normalizeText(value: string) {
@@ -18,7 +18,7 @@ function extractScore(text: string): number | null {
   }
 
   const parsed = Number(rawScore);
-  return Number.isNaN(parsed) ? null : parsed;
+  return Number.isNaN(parsed) || parsed < 0 || parsed > 100 ? null : parsed;
 }
 
 function evaluateChoiceQuestion(answer: unknown, correctAnswers: string[], type: 'single' | 'multiple') {
@@ -59,7 +59,7 @@ function evaluateChoiceQuestion(answer: unknown, correctAnswers: string[], type:
 }
 
 async function evaluateOpenQuestion(answer: string, questionText: string, questionId: number, modelAnswer: string, keyConcepts: string[], expectedExpressions: string[]) {
-  if (!GEMINI_API_KEY) {
+  if (!GEMINI_API_KEY && !process.env.GROQ_API_KEY?.trim()) {
     const normalizedAnswer = normalizeText(answer);
     const foundConcepts = keyConcepts.filter((concept) =>
       normalizedAnswer.includes(normalizeText(concept))
@@ -71,36 +71,14 @@ async function evaluateOpenQuestion(answer: string, questionText: string, questi
   }
 
   try {
-    const geminiRes = await fetch(GEMINI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': GEMINI_API_KEY
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text:
-                  `Eres un evaluador de respuestas abiertas para cuestionarios educativos. ` +
-                  `Debes devolver un feedback breve en espanol y un puntaje del 0 al 100. ` +
-                  `Pregunta ID: ${questionId}. ` +
-                  `Pregunta: ${questionText}. ` +
-                  `Respuesta modelo: ${modelAnswer}. ` +
-                  `Conceptos clave: ${keyConcepts.join(', ') || 'sin conceptos definidos'}. ` +
-                  `Expresiones esperadas: ${expectedExpressions.join(', ') || 'sin expresiones definidas'}. ` +
-                  `Respuesta del alumno: ${answer}`
-              }
-            ]
-          }
-        ]
-      })
-    });
-
-    const geminiData = await geminiRes.json();
-    const rawFeedback =
-      geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin feedback de Gemini.';
+    const rawFeedback = await requestEvaluationFeedback(buildEvaluationPrompt({
+      questionId,
+      question: questionText,
+      referenceAnswer: modelAnswer,
+      keyConcepts,
+      expectedExpressions,
+      studentAnswer: answer
+    }));
     const score = extractScore(rawFeedback);
 
     const cleanFeedback = rawFeedback
@@ -119,9 +97,9 @@ async function evaluateOpenQuestion(answer: string, questionText: string, questi
       return `Puntaje: ${score}/100. ${normalizedFeedback}`;
     }
 
-    return normalizedFeedback;
-  } catch {
-    return 'Error al conectar con Gemini.';
+    throw new Error('La IA devolvio una evaluacion sin puntaje valido.');
+  } catch (error) {
+    return `Evaluacion pendiente. ${error instanceof Error ? error.message : 'No se pudo conectar con la IA.'} Intenta enviar nuevamente.`;
   }
 }
 
@@ -188,8 +166,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const feedback = await Promise.all(
-      questions.map(async (entry) => {
+    const feedback: Array<string | null> = [];
+    for (const entry of questions) {
+      feedback.push(await (async () => {
         if (!entry) {
           return null;
         }
@@ -216,8 +195,14 @@ export async function POST(request: Request) {
         }
 
         return 'Tipo de pregunta desconocido.';
-      })
-    );
+      })());
+      if (feedback[feedback.length - 1]?.startsWith('Evaluacion pendiente.')) break;
+    }
+
+    if (feedback.some((item) => item?.startsWith('Evaluacion pendiente.'))) {
+      const error = feedback.find((item) => item?.startsWith('Evaluacion pendiente.'));
+      return NextResponse.json({ error, feedback, score: null, approved: false }, { status: 503 });
+    }
 
     const scores = feedback
       .map((item) => (item ? extractScore(item) : null))
@@ -269,6 +254,10 @@ export async function POST(request: Request) {
     );
   } else {
     feedback = 'Tipo de pregunta desconocido.';
+  }
+
+  if (feedback.startsWith('Evaluacion pendiente.')) {
+    return NextResponse.json({ error: feedback, feedback }, { status: 503 });
   }
 
   return NextResponse.json({ feedback });

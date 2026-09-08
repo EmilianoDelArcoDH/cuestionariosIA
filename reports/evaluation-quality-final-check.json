@@ -1,0 +1,6 @@
+{
+  "questionId": 40,
+  "answer": "Quien lo lea podra localizar una pinchadura, desmontar la camara y colocar un parche siguiendo los pasos.",
+  "provider": "groq",
+  "feedback": "Puntaje: 100/100. Buen trabajo: describiste claramente lo que el lector aprenderá (localizar una pinchadura, desmontar la cámara y aplicar un parche), cumpliendo con lo solicitado. No se detectan errores ni omisiones relevantes."
+}
