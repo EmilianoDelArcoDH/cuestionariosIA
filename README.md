@@ -37,6 +37,7 @@ Configurar en `.env` (raíz del proyecto):
 GEMINI_API_KEY="tu_clave_gemini"
 GROQ_API_KEY="tu_clave_groq"
 GROQ_MODEL="openai/gpt-oss-120b"
+TRANSFORMERS_DEVICE="cpu"
 ```
 
 Crear la clave de Groq en https://console.groq.com/keys usando el plan gratuito.
