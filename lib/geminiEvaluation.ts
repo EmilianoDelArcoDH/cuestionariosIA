@@ -1,3 +1,5 @@
+import { evaluateWithTransformer } from './transformerEvaluator';
+
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
 
 export async function requestGeminiFeedback(prompt: string, apiKey: string, maxAttempts = 3): Promise<string> {
@@ -91,6 +93,18 @@ async function requestGroqFeedback(prompt: string, apiKey: string): Promise<stri
   return validateFeedback(choice.message?.content);
 }
 
+async function requestTransformerFallback(prompt: string, cause: unknown): Promise<string> {
+  try {
+    const feedback = validateFeedback(await evaluateWithTransformer(prompt));
+    console.info('Evaluation provider succeeded', { provider: 'transformers-js' });
+    return feedback;
+  } catch {
+    console.warn('Evaluation provider failed', { provider: 'transformers-js' });
+    if (cause instanceof Error) throw cause;
+    throw new Error('La IA no pudo completar la evaluacion: los proveedores disponibles fallaron o alcanzaron su limite.');
+  }
+}
+
 /** Gemini is primary; Groq is used only when Gemini cannot produce a valid grade. */
 export async function requestEvaluationFeedback(prompt: string): Promise<string> {
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
@@ -114,8 +128,14 @@ export async function requestEvaluationFeedback(prompt: string): Promise<string>
       return feedback;
     } catch {
       console.warn('Evaluation provider failed', { provider: 'groq' });
-      throw new Error('La IA no pudo completar la evaluacion: los proveedores disponibles fallaron o alcanzaron su limite.');
+      return requestTransformerFallback(
+        prompt,
+        new Error('La IA no pudo completar la evaluacion: los proveedores disponibles fallaron o alcanzaron su limite.')
+      );
     }
   }
-  throw geminiFailure instanceof Error ? geminiFailure : new Error('No se pudo completar la evaluacion.');
+  return requestTransformerFallback(
+    prompt,
+    geminiFailure instanceof Error ? geminiFailure : new Error('No se pudo completar la evaluacion.')
+  );
 }
