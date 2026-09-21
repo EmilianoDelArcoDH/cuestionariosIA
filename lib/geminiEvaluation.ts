@@ -1,5 +1,3 @@
-import { evaluateWithTransformer } from './transformerEvaluator';
-
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
 
 export async function requestGeminiFeedback(prompt: string, apiKey: string, maxAttempts = 3): Promise<string> {
@@ -95,6 +93,7 @@ async function requestGroqFeedback(prompt: string, apiKey: string): Promise<stri
 
 async function requestTransformerFallback(prompt: string, cause: unknown): Promise<string> {
   try {
+    const { evaluateWithTransformer } = await import('./transformerEvaluator');
     const feedback = validateFeedback(await evaluateWithTransformer(prompt));
     console.info('Evaluation provider succeeded', { provider: 'transformers-js' });
     return feedback;
