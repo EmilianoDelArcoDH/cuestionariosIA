@@ -8,6 +8,43 @@ Este proyecto es un MVP de una plataforma para crear, administrar y resolver cue
 - PostgreSQL + Prisma ORM
 - Motor de evaluación desacoplado en `lib/evaluation`
 
+### Levantar el servidor local
+
+1. Instalar dependencias:
+
+```bash
+npm install
+```
+
+2. Crear o completar el archivo `.env` en la raíz del proyecto. Como mínimo debe incluir la conexión a la base de datos:
+
+```dotenv
+DATABASE_URL="postgresql://usuario:password@host:puerto/base"
+DIRECT_URL="postgresql://usuario:password@host:puerto/base"
+GEMINI_API_KEY="tu_clave_gemini"
+TRANSFORMERS_DEVICE="cpu"
+```
+
+3. Generar el cliente de Prisma si es necesario:
+
+```bash
+npm run prisma:generate
+```
+
+4. Levantar el servidor de desarrollo:
+
+```bash
+npm run dev
+```
+
+La aplicación queda disponible en:
+
+```text
+http://localhost:3000
+```
+
+Si se agregan o cambian variables de entorno, reiniciar el servidor.
+
 ### Flujo de evaluación
 
 - **Capa 1 (reglas)**: `ruleBasedValidator` aplica validaciones determinísticas (longitud, conceptos obligatorios, estructura HTML básica, regex opcional).
