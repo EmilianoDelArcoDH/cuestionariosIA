@@ -122,7 +122,7 @@ function isQuestionAnswered(question: any, answer: unknown) {
   return false;
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const body = await request.json().catch(() => null);
   const answers = Array.isArray(body?.answers) ? body.answers : null;
 
@@ -264,4 +264,18 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ feedback });
+}
+
+export async function POST(request: Request) {
+  try {
+    return await handlePost(request);
+  } catch (error) {
+    console.error('Evaluate route failed', {
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+    return NextResponse.json(
+      { error: 'No se pudo evaluar el cuestionario. Revisa la configuracion del servidor.' },
+      { status: 500 }
+    );
+  }
 }
