@@ -3,6 +3,9 @@ import { findQuestionById } from '@/lib/questionnaires';
 import { requestEvaluationFeedback } from '@/lib/geminiEvaluation';
 import { buildEvaluationPrompt } from '@/lib/evaluationPrompt';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 function normalizeText(value: string) {
