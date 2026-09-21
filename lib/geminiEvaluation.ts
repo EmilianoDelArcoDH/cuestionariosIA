@@ -93,14 +93,25 @@ async function requestGroqFeedback(prompt: string, apiKey: string): Promise<stri
 
 async function requestTransformerFallback(prompt: string, cause: unknown): Promise<string> {
   try {
-    const { evaluateWithTransformer } = await import('./transformerEvaluator');
+    const { evaluateWithTransformer } = await import('./transformerEvaluator.ts');
     const feedback = validateFeedback(await evaluateWithTransformer(prompt));
     console.info('Evaluation provider succeeded', { provider: 'transformers-js' });
     return feedback;
-  } catch {
-    console.warn('Evaluation provider failed', { provider: 'transformers-js' });
-    if (cause instanceof Error) throw cause;
-    throw new Error('La IA no pudo completar la evaluacion: los proveedores disponibles fallaron o alcanzaron su limite.');
+  } catch (transformerError) {
+    console.warn('Evaluation provider failed', {
+      provider: 'transformers-js',
+      message: transformerError instanceof Error ? transformerError.message : 'Unknown error'
+    });
+
+    try {
+      const { evaluateWithLocalHeuristic } = await import('./localHeuristicEvaluator.ts');
+      const feedback = validateFeedback(await evaluateWithLocalHeuristic(prompt));
+      console.info('Evaluation provider succeeded', { provider: 'local-heuristic' });
+      return feedback;
+    } catch {
+      if (cause instanceof Error) throw cause;
+      throw new Error('La IA no pudo completar la evaluacion: los proveedores disponibles fallaron o alcanzaron su limite.');
+    }
   }
 }
 
