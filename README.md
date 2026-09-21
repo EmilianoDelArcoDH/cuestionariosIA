@@ -55,6 +55,3 @@ Los registros del servidor indican el proveedor que falló sin guardar claves ni
 respuestas de alumnos. La traducción de cuestionarios sigue usando Gemini.
 
 Verificación (Node.js 24): `node --experimental-strip-types --test tests/*.test.mjs`.
-
-
-##cosas
